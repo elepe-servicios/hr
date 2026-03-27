@@ -1,7 +1,7 @@
 # Copyright 2021 Creu Blanca
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
-from odoo import Command
+from odoo import Command, _
 
 from odoo.addons.base.tests.common import BaseCommon
 
@@ -80,7 +80,7 @@ class TestHRPersonalEquipmentRequest(BaseCommon):
         self.assertTrue(self.personal_equipment_request.name)
         self.assertEqual(
             self.personal_equipment_request.name,
-            self.env._("Personal Equipment Request by %s") % "Employee Test",
+            _("Personal Equipment Request by %s") % "Employee Test",
         )
 
     def test_request_default_employee(self):

@@ -92,9 +92,7 @@
         </field>
     </record>
     <record model="ir.ui.view" id="hr_personal_equipment_search_view">
-        <field
-            name="name"
-        >hr.personal.equipment.search (in hr_personal_equipment_request)</field>
+        <field name="name">hr.personal.equipment.search (in hr_personal_equipment_request)</field>
         <field name="model">hr.personal.equipment</field>
         <field name="arch" type="xml">
             <search>
@@ -102,42 +100,42 @@
                 <field name="state" />
                 <field name="employee_id" groups="hr.group_hr_user" />
                 <field name="product_id" />
-                <group expand="0" name="group_by" string="Group By">
-                    <filter
-                        name="filter_state"
-                        string="State"
-                        context="{'group_by' : 'state'}"
-                    />
-                    <filter
-                        name="filter_product_id"
-                        string="Product"
-                        context="{'group_by' : 'product_id'}"
-                    />
-                    <filter
-                        name="filter_employee_id"
-                        string="Employee"
-                        context="{'group_by' : 'employee_id'}"
-                    />
-                </group>
+                <separator />
                 <filter
                     string="In Draft"
                     name="filter_draft_state"
-                    domain="[('state', '=', 'draft')]"
+                    domain="[('state','=','draft')]"
                 />
                 <filter
                     string="Accepted"
                     name="filter_accepted_state"
-                    domain="[('state', '=', 'accepted')]"
+                    domain="[('state','=','accepted')]"
                 />
                 <filter
                     string="Valid"
                     name="filter_valid_state"
-                    domain="[('state', '=', 'valid')]"
+                    domain="[('state','=','valid')]"
                 />
                 <filter
                     string="Expired"
                     name="filter_expired_state"
-                    domain="[('state', '=', 'expired')]"
+                    domain="[('state','=','expired')]"
+                />
+                <separator />
+                <filter
+                    name="filter_state"
+                    string="State"
+                    context="{'group_by':'state'}"
+                />
+                <filter
+                    name="filter_product_id"
+                    string="Product"
+                    context="{'group_by':'product_id'}"
+                />
+                <filter
+                    name="filter_employee_id"
+                    string="Employee"
+                    context="{'group_by':'employee_id'}"
                 />
             </search>
         </field>

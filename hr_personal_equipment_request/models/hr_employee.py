@@ -1,7 +1,7 @@
 # Copyright 2021 Creu Blanca
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
-from odoo import fields, models
+from odoo import _, fields, models
 
 
 class HrEmployee(models.Model):
@@ -37,7 +37,7 @@ class HrEmployee(models.Model):
     def action_open_equipment_request(self):
         self.ensure_one()
         return {
-            "name": self.env._("Equipment Request"),
+            "name": _("Equipment Request"),
             "type": "ir.actions.act_window",
             "res_model": "hr.personal.equipment.request",
             "view_mode": "list,form",
@@ -48,7 +48,7 @@ class HrEmployee(models.Model):
     def action_open_personal_equipment(self):
         self.ensure_one()
         return {
-            "name": self.env._("Personal Equipment"),
+            "name": _("Personal Equipment"),
             "type": "ir.actions.act_window",
             "res_model": "hr.personal.equipment",
             "context": {"group_by": "state"},
