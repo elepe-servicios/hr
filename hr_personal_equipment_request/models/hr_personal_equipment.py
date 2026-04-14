@@ -44,13 +44,6 @@ class HrPersonalEquipment(models.Model):
     def _onchange_uom_id(self):
         if self.product_id:
             self.product_uom_id = self.product_id.uom_id
-        return {
-            "domain": {
-                "product_uom_id": [
-                    ("category_id", "=", self.product_uom_id.category_id.id)
-                ]
-            }
-        }
 
     @api.depends("product_id", "employee_id")
     def _compute_name(self):
