@@ -2,10 +2,9 @@
 # Copyright 2022-2023 Tecnativa - Víctor Martínez
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
-from odoo import api, fields, models
+from odoo import api, fields, models, modules
 from odoo.exceptions import UserError
 from odoo.fields import Command, Domain
-from odoo.tools import config
 
 SECTION_LINES = [
     Command.create(
@@ -45,10 +44,22 @@ class HrEmployee(models.Model):
         copy=True,
     )
 
+    def _get_planning_calendars(self, from_date, to_date):
+        self.ensure_one()
+        # We need to use sudo to avoid the error  odoo.exceptions.AccessError:
+        # The fields “calendar_ids”, which you are trying to read, are not
+        # available for employee public profiles.
+        return self.sudo().calendar_ids.filtered(
+            lambda x: (not x.date_start or (from_date and x.date_start <= from_date))
+            and (not x.date_end or (to_date and x.date_end >= to_date))
+        )
+
     @api.model
     def default_get(self, fields):
         """Set calendar_ids default value to cover all use cases."""
         vals = super().default_get(fields)
+        if not self._test_module_hr_attendance_employee_calendar_planning():
+            return vals
         if "calendar_ids" in fields and not vals.get("calendar_ids"):
             vals["calendar_ids"] = [
                 Command.create(
@@ -59,12 +70,14 @@ class HrEmployee(models.Model):
 
     def _regenerate_calendar(self):
         self.ensure_one()
+        if not self.version_id:
+            # It is important that if there is no auto-generated version_id (from the
+            # create method of hr.employee.calendar), we do not regenerate the calendar
+            # "yet"; this will be done later in the create method of hr.employee.
+            return
         vals_list = []
-        today = fields.Date.today()
-        active_planning = self.calendar_ids.filtered(
-            lambda c: (not c.date_start or c.date_start <= today)
-            and (not c.date_end or c.date_end >= today)
-        )
+        today = fields.Date.context_today(self)
+        active_planning = self._get_planning_calendars(today, today)
         if active_planning:
             planning_to_use = active_planning[:1]
         elif self.calendar_ids:
@@ -105,22 +118,24 @@ class HrEmployee(models.Model):
                 seq += 1
                 vals_list.append((0, 0, data))
         if not self.resource_id.calendar_id.auto_generate:
-            self.resource_id.calendar_id = (
-                self.env["resource.calendar"]
-                .create(
-                    {
-                        "active": False,
-                        "company_id": self.company_id.id,
-                        "auto_generate": True,
-                        "name": self.env._("Auto generated calendar for employee")
-                        + f" {self.name}",
-                        "attendance_ids": vals_list,
-                        "two_weeks_calendar": two_weeks,
-                        "tz": self.tz,
-                    }
-                )
-                .id
+            calendar = self.env["resource.calendar"].create(
+                {
+                    "active": False,
+                    "company_id": self.company_id.id,
+                    "auto_generate": True,
+                    "name": self.env._("Auto generated calendar for employee")
+                    + f" {self.name}",
+                    "attendance_ids": vals_list,
+                    "two_weeks_calendar": two_weeks,
+                    "tz": self.tz,
+                }
             )
+            # We define only self.version_id.resource_calendar_id because the
+            # _inverse_resource_calendar_id() method in hr.version defines
+            # employee.resource_id.calendar_id
+            # We also don't need to define the employee's self.resource_calendar_id
+            # because it is a related version_id.resource_calendar_id
+            self.version_id.resource_calendar_id = calendar
         else:
             self.resource_calendar_id.attendance_ids = vals_list
         if planning_to_use:
@@ -139,10 +154,7 @@ class HrEmployee(models.Model):
         if len(self) == 1 and self.calendar_ids:
             from_dt_tz = fields.Datetime.context_timestamp(self, from_datetime)
             check_date = from_dt_tz.date()
-            planned_line = self.calendar_ids.filtered(
-                lambda c: (not c.date_start or c.date_start <= check_date)
-                and (not c.date_end or c.date_end >= check_date)
-            )
+            planned_line = self._get_planning_calendars(check_date, check_date)
             if planned_line:
                 best_line = sorted(
                     planned_line,
@@ -163,11 +175,8 @@ class HrEmployee(models.Model):
     def copy_global_leaves(self):
         self.ensure_one()
         leave_ids = []
-        today = fields.Date.today()
-        active_planning = self.calendar_ids.filtered(
-            lambda c: (not c.date_start or c.date_start <= today)
-            and (not c.date_end or c.date_end >= today)
-        )
+        today = fields.Date.context_today(self)
+        active_planning = self._get_planning_calendars(today, today)
         if not active_planning and self.calendar_ids:
             active_planning = self.calendar_ids.sorted(
                 key=lambda r: r.date_end or r.date_start, reverse=True
@@ -221,13 +230,36 @@ class HrEmployee(models.Model):
         new.filtered("calendar_ids").regenerate_calendar()
         return new
 
+    def _test_module_hr_attendance_employee_calendar_planning(self):
+        """This method indicates whether the module currently being executed is the
+        one of interest for performing various actions.
+        Generally, only the `hr_employee_calendar_planning` module will be checked,
+        but if, for example, there is another module that depends on it (such as
+        `hr_attendance_employee_calendar_planning`), that other module will need to
+        override this method to add the specific condition for that test.
+        Example:
+        condition = super()._test_module_hr_attendance_employee_calendar_planning()
+        condition_extra = not modules.module.current_test or (
+            modules.module.current_test
+            and modules.module.current_test.test_module
+            == "hr_attendance_employee_calendar_planning"
+        )
+        return condition or condition_extra
+        """
+        return not modules.module.current_test or (
+            modules.module.current_test
+            and modules.module.current_test.test_module
+            == "hr_employee_calendar_planning"
+        )
+
     @api.model_create_multi
     def create(self, vals_list):
         res = super().create(vals_list)
+        if not self._test_module_hr_attendance_employee_calendar_planning():
+            return res
         # Avoid creating an employee without calendars
         if (
             not self.env.context.get("skip_employee_calendars_required")
-            and not config["test_enable"]
             and not self.env.context.get("install_mode")
             and res.filtered(lambda x: not x.calendar_ids)
         ):
